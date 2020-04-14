@@ -14,21 +14,13 @@ fn main() {
     let (input_sender, input_receiver) = unbounded();
     let (event_sender, event_receiver) = unbounded();
 
-    thread::spawn(move || {
+    let _handle = thread::spawn(move || {
 
-        let (mut game_state, mut dispatcher) = colony::default_state_and_dispatcher(input_receiver, event_sender);
+        let (game_state, mut dispatcher) = colony::default_state_and_dispatcher(input_receiver, event_sender);
 
         loop {
           dispatcher.dispatch(&game_state.world);
         }
-
-        // { event_sender.send(0);
-        // }
-
-        // loop {
-        //     let register = receiver.recv();
-        //     println!("Somebody tried to register");
-        // }
     });
 
 
@@ -39,7 +31,7 @@ fn main() {
             default_font: None,
             antialiasing: false,
         }
-    )
+    );
 }
 
 
@@ -52,15 +44,17 @@ struct ColonyFrontend {
 
 enum FrontendState {
     NothingHere{btn_state: button::State},
-    NormalTurn{btn_state: button::State},
+    NormalTurn{btn_state: button::State, turn: usize},
 }
 
 #[derive(Debug, Clone)]
 enum Message {
-    TurnActive(Result<usize, Error>),
-    NextTurn,
+    StartGame,
+    GameStarted(Result<(), Error>),
     MessageSent(Result<(), Error>),
-    UpdateTick(chrono::DateTime<chrono::Local>),
+    NextTurn,
+    TurnActive(Result<usize, Error>),
+    // UpdateTick(chrono::DateTime<chrono::Local>),
 }
 
 impl Application for ColonyFrontend {
@@ -82,40 +76,45 @@ impl Application for ColonyFrontend {
     fn title(&self) -> String {
         let subtitle = match self.state {
             FrontendState::NothingHere{btn_state: _} => "NothingHere",
-            FrontendState::NormalTurn{btn_state: _} => "Playing turn ..",
+            FrontendState::NormalTurn{btn_state: _, turn: _} => "Playing turn ..",
         };
         format!("{} - Colony", subtitle)
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
-            Message::TurnActive(Ok(_turn)) => {
-                self.state = match self.state {
-                    FrontendState::NothingHere{btn_state} | FrontendState::NormalTurn{btn_state} => FrontendState::NormalTurn{btn_state}
-                };
+            Message::StartGame => {
+                println!("start game pressed");
+                Command::perform(ColonyFrontend::start_game(self.input_sender.clone()), Message::GameStarted)
+            },
+            Message::GameStarted(_) => Command::perform(ColonyFrontend::get_turn(self.event_receiver.clone()), Message::TurnActive),
+            Message::NextTurn => Command::perform(ColonyFrontend::next_turn(self.input_sender.clone()), Message::MessageSent),
+            Message::MessageSent(success) => {
+                match success {
+                    Ok(()) => (),
+                    Err(err) => {
+                        println!("{:?}", err);
+                    }
+                }
                 Command::none()
+            },
+            Message::TurnActive(Ok(turn)) => {
+                self.state = match self.state {
+                    FrontendState::NothingHere{btn_state} | FrontendState::NormalTurn{btn_state, turn:  _} => FrontendState::NormalTurn{btn_state, turn}
+                };
+                Command::perform(ColonyFrontend::get_turn(self.event_receiver.clone()), Message::TurnActive)
             },
             Message::TurnActive(Err(e)) => {
                 println!("{:?}", e);
                 Command::none()
             }
-            Message::NextTurn => Command::perform(ColonyFrontend::next_turn(self.input_sender.clone()), Message::MessageSent),
-            Message::UpdateTick(_) => Command::perform(ColonyFrontend::get_turn(self.event_receiver.clone()), Message::TurnActive),
-            Message::MessageSent(success) => {
-                match success {
-                    Ok(()) => Command::none(),
-                    Err(err) => {
-                        println!("{:?}", err);
-                        Command::none()
-                    }
-                }
-            },
+            // Message::UpdateTick(_) => Command::none(),
         }
     }
 
-    fn subscription(&self) -> Subscription<Message> {
-        time::every(std::time::Duration::from_millis(1000)).map(Message::UpdateTick)
-    }
+    // fn subscription(&self) -> Subscription<Message> {
+    //     time::every(std::time::Duration::from_millis(1000)).map(Message::UpdateTick)
+    // }
 
     fn view(&mut self) -> Element<Message> {
         let content = match &mut (self.state) {
@@ -123,12 +122,12 @@ impl Application for ColonyFrontend {
                 Column::new()
                     .width(Length::Shrink)
                     .push(Text::new("Nothing here..."))
-                    .push( button(btn_state, "Start game").on_press(Message::NextTurn) )
+                    .push( button(btn_state, "Start game").on_press(Message::StartGame) )
             ,
-            FrontendState::NormalTurn{ref mut btn_state} =>
+            FrontendState::NormalTurn{ref mut btn_state, turn} =>
                 Column::new()
                     .width(Length::Shrink)
-                    .push(Text::new("Turn:"))
+                    .push(Text::new(format!("Turn: {}", turn)))
                     .push( button(btn_state, "Next turn").on_press(Message::NextTurn) ),
         };
 
@@ -148,8 +147,13 @@ fn button<'a>(state: &'a mut button::State, text: &str) -> Button<'a, Message> {
 }
 
 impl ColonyFrontend {
+    async fn start_game(action_sender: Sender<PlayerAction>) -> Result<(), Error> {
+        match action_sender.send(PlayerAction::StartGame)  {
+            Ok(()) => Ok(()),
+            Err(_) => Err(Error{desc: "Failed to send StartGame message"}),
+        }
+    }
     async fn get_turn(event_receiver: Receiver<usize>) -> Result<usize, Error> {
-
         match event_receiver.recv() {
             Ok(val) => Ok(val),
             Err(_e) => {

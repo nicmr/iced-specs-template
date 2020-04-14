@@ -11,7 +11,7 @@ pub mod game;
 
 pub mod resources;
 
-use io::{PlayerAction};
+use io::{PlayerAction, Broadcast};
 
 
 
@@ -31,7 +31,9 @@ pub fn default_state_and_dispatcher<'a> (input_receiver: Receiver<PlayerAction>,
     gs.world.register::<Occupation>();
     // gs.world.insert(input_receiver);
     gs.world.insert(io::FrontendReceiver{receiver: input_receiver});
+    gs.world.insert(io::FrontendSender{sender: event_sender});
     gs.world.insert(EventChannel::<PlayerAction>::new());
+    gs.world.insert(EventChannel::<Broadcast>::new());
 
     gs.world.create_entity()
         .with(Occupation { name: "Barkeeper"})
@@ -49,7 +51,12 @@ pub fn default_state_and_dispatcher<'a> (input_receiver: Receiver<PlayerAction>,
             game::TurnIncrementSystem::new(&mut gs.world),
             "TurnIncrementSystem",
             &["ActionChannelSystem"]
-        ).build();
+        ).with(
+            io::SendToFrontendSystem::new(&mut gs.world),
+            "SendToFrontendSystem",
+            &["TurnIncrementSystem"]
+        )
+        .build();
 
     dispatcher.setup(&mut gs.world);
     (gs, dispatcher)
