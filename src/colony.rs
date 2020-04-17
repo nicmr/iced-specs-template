@@ -16,7 +16,7 @@ use io::{PlayerAction, Broadcast};
 
 
 #[derive(Component, Debug, Clone)]
-pub struct Occupation {
+pub struct PlaceholderComponent {
     pub name: &'static str,
 }
 
@@ -28,24 +28,22 @@ pub fn default_state_and_dispatcher<'a> (input_receiver: Receiver<PlayerAction>,
     let mut gs = ColonyState {
         world: World::new(),
     };
-    gs.world.register::<Occupation>();
-    // gs.world.insert(input_receiver);
+    gs.world.register::<PlaceholderComponent>();
     gs.world.insert(io::FrontendReceiver{receiver: input_receiver});
     gs.world.insert(io::FrontendSender{sender: event_sender});
     gs.world.insert(EventChannel::<PlayerAction>::new());
     gs.world.insert(EventChannel::<Broadcast>::new());
 
     gs.world.create_entity()
-        .with(Occupation { name: "Barkeeper"})
+        .with(PlaceholderComponent { name: "Barkeeper"})
         .build();
 
     gs.world.create_entity()
-        .with(Occupation { name: "Guard"})
+        .with(PlaceholderComponent { name: "Guard"})
         .build();
 
     let mut dispatcher =
         DispatcherBuilder::new()
-        // .with(io::OccupationPrintSystem, "occprs", &[])
         .with(io::ActionChannelSystem, "ActionChannelSystem", &[])
         .with(
             game::TurnIncrementSystem::new(&mut gs.world),

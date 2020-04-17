@@ -2,10 +2,9 @@ use std::thread;
 
 use crossbeam_channel::{unbounded, Sender, Receiver};
 use iced::{
-    button, Application, Button, Column, Command, Subscription,
+    button, Application, Button, Column, Command,
     Container, Element, Length,Settings, Text, window,
 };
-mod time;
 
 mod colony;
 use colony::io::PlayerAction;
@@ -54,7 +53,6 @@ enum Message {
     MessageSent(Result<(), Error>),
     NextTurn,
     TurnActive(Result<usize, Error>),
-    // UpdateTick(chrono::DateTime<chrono::Local>),
 }
 
 impl Application for ColonyFrontend {
@@ -108,13 +106,8 @@ impl Application for ColonyFrontend {
                 println!("{:?}", e);
                 Command::none()
             }
-            // Message::UpdateTick(_) => Command::none(),
         }
     }
-
-    // fn subscription(&self) -> Subscription<Message> {
-    //     time::every(std::time::Duration::from_millis(1000)).map(Message::UpdateTick)
-    // }
 
     fn view(&mut self) -> Element<Message> {
         let content = match &mut (self.state) {
@@ -173,5 +166,3 @@ impl ColonyFrontend {
 struct Error {
     desc: &'static str
 }
-
-

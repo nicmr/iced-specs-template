@@ -2,20 +2,7 @@ use specs::prelude::*;
 use specs::shrev::{EventChannel};
 
 use crossbeam_channel::{Receiver, TryRecvError, Sender};
-use super::Occupation;
 use super::resources::{TurnResource};
-
-pub struct OccupationPrintSystem;
-
-impl<'a> System<'a> for OccupationPrintSystem {
-    type SystemData = ReadStorage<'a, Occupation>;
-
-    fn run(&mut self, occupations : Self::SystemData) {
-        for occ in occupations.join() {
-            println!("Occupation is: {}", occ.name);
-        }
-    }
-}
 
 pub enum PlayerAction {
     StartGame,
